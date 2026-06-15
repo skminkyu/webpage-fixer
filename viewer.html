@@ -350,9 +350,28 @@
         hoveredId = null; render(); updateHover();
       });
 
+      // Feature 1: click card → scroll image to annotation box
+      card.addEventListener('click', () => scrollImageToAnnotation(a));
+
       commentList.appendChild(card);
     });
     annotCount.textContent = `${annotations.length}개`;
+  }
+
+  function scrollImageToAnnotation(a) {
+    const cw = drawCanvas.width, ch = drawCanvas.height;
+    const boxTop = a.y * ch;
+    const boxCenterY = (a.y + a.height / 2) * ch;
+    const canvasArea = document.getElementById('canvas-area');
+
+    // Get canvas top relative to canvas-area scroll container
+    const wrapperTop = imageWrapper.offsetTop;
+    const targetScrollTop = wrapperTop + boxCenterY - canvasArea.clientHeight / 2;
+    canvasArea.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+
+    // Flash the box
+    hoveredId = a.id; render();
+    setTimeout(() => { hoveredId = null; render(); }, 1200);
   }
 
   function getAnnotationAt(x, y) {
@@ -380,6 +399,7 @@
     hoveredId = null; render(); updateHover();
   });
 
+  // Click on canvas box → scroll sidebar to card
   drawCanvas.addEventListener('click', e => {
     const rect = drawCanvas.getBoundingClientRect();
     const found = getAnnotationAt(e.clientX - rect.left, e.clientY - rect.top);
@@ -390,6 +410,31 @@
       card.classList.add('highlighted');
       setTimeout(() => card.classList.remove('highlighted'), 1500);
     }
+  });
+
+  // Feature 2: scroll image → sidebar follows to nearest visible annotation
+  let scrollTimer = null;
+  document.getElementById('canvas-area').addEventListener('scroll', () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      const canvasArea = document.getElementById('canvas-area');
+      const areaRect = canvasArea.getBoundingClientRect();
+      const cw = drawCanvas.width, ch = drawCanvas.height;
+
+      // Find the annotation whose center is closest to the middle of the visible area
+      const visibleMidY = canvasArea.scrollTop + canvasArea.clientHeight / 2 - imageWrapper.offsetTop;
+      let closest = null, minDist = Infinity;
+      annotations.forEach(a => {
+        const boxCenterY = (a.y + a.height / 2) * ch;
+        const dist = Math.abs(boxCenterY - visibleMidY);
+        if (dist < minDist) { minDist = dist; closest = a; }
+      });
+
+      if (closest) {
+        const card = document.querySelector(`.comment-card[data-id="${closest.id}"]`);
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 150);
   });
 
   function updateHover() {
