@@ -359,25 +359,22 @@
   });
 
   function loadImage(file) {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onerror = () => alert('이미지를 불러올 수 없습니다. 다른 파일을 시도해 주세요.');
-    img.onload = () => {
-      originalImage = img;
-      // Assign onload BEFORE setting src to avoid missing cached-load events
+    const reader = new FileReader();
+    reader.onerror = () => alert('파일을 읽을 수 없습니다. 다른 파일을 시도해 주세요.');
+    reader.onload = (e) => {
       bgImage.onload = () => {
+        originalImage = bgImage;
         uploadPlaceholder.style.display = 'none';
         imageWrapper.classList.remove('no-image');
-        // Wait two frames so the browser finishes layout before reading offsetWidth/offsetHeight
         requestAnimationFrame(() => requestAnimationFrame(() => {
           syncCanvasSize();
           render();
         }));
       };
-      bgImage.onerror = () => alert('이미지 표시 중 오류가 발생했습니다.');
-      bgImage.src = url;
+      bgImage.onerror = () => alert('이미지를 표시할 수 없습니다. PNG/JPG/WebP 파일인지 확인해 주세요.');
+      bgImage.src = e.target.result;
     };
-    img.src = url;
+    reader.readAsDataURL(file);
   }
 
   /* ── Sync canvas size to rendered image ── */
