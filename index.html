@@ -266,6 +266,7 @@
   <button class="color-btn" data-color="#4299e1" style="background:#4299e1" title="파란색"></button>
   <button class="color-btn" data-color="#48bb78" style="background:#48bb78" title="초록색"></button>
   <div class="sep"></div>
+  <button class="tool-btn" id="btn-upload">이미지 변경</button>
   <button class="tool-btn" id="btn-reset">초기화</button>
   <button class="tool-btn primary" id="btn-export">내보내기</button>
 </div>
@@ -318,6 +319,7 @@
   const ctx            = drawCanvas.getContext('2d');
   const commentList    = document.getElementById('comment-list');
   const annotCount     = document.getElementById('annotation-count');
+  const btnUpload      = document.getElementById('btn-upload');
   const btnReset       = document.getElementById('btn-reset');
   const btnExport      = document.getElementById('btn-export');
   const colorBtns      = document.querySelectorAll('.color-btn');
@@ -359,9 +361,10 @@
   function loadImage(file) {
     const url = URL.createObjectURL(file);
     const img = new Image();
+    img.onerror = () => alert('이미지를 불러올 수 없습니다. 다른 파일을 시도해 주세요.');
     img.onload = () => {
       originalImage = img;
-      bgImage.src = url;
+      // Assign onload BEFORE setting src to avoid missing cached-load events
       bgImage.onload = () => {
         uploadPlaceholder.style.display = 'none';
         imageWrapper.classList.remove('no-image');
@@ -371,6 +374,8 @@
           render();
         }));
       };
+      bgImage.onerror = () => alert('이미지 표시 중 오류가 발생했습니다.');
+      bgImage.src = url;
     };
     img.src = url;
   }
@@ -603,6 +608,9 @@
     render();
     buildSidebar();
   }
+
+  /* ── Upload button ── */
+  btnUpload.addEventListener('click', () => fileInput.click());
 
   /* ── Reset ── */
   btnReset.addEventListener('click', () => {
