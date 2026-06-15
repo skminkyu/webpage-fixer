@@ -268,7 +268,7 @@
   <div class="sep"></div>
   <button class="tool-btn" id="btn-upload">이미지 변경</button>
   <button class="tool-btn" id="btn-reset">초기화</button>
-  <button class="tool-btn primary" id="btn-export">내보내기</button>
+  <button class="tool-btn primary" id="btn-export">공유 링크 생성</button>
 </div>
 
 <div id="main">
@@ -620,30 +620,70 @@
     buildSidebar();
   });
 
-  /* ── Export ── */
-  btnExport.addEventListener('click', () => {
+  /* ── Share link ── */
+  btnExport.addEventListener('click', async () => {
     if (!originalImage) { alert('먼저 이미지를 업로드해 주세요.'); return; }
+    if (!annotations.length) { alert('주석을 하나 이상 추가해 주세요.'); return; }
 
-    const iw = originalImage.naturalWidth;
-    const ih = originalImage.naturalHeight;
-    const offscreen = document.createElement('canvas');
-    offscreen.width = iw;
-    offscreen.height = ih;
-    const oc = offscreen.getContext('2d');
+    btnExport.disabled = true;
+    btnExport.textContent = '생성 중...';
 
-    oc.drawImage(originalImage, 0, 0, iw, ih);
+    try {
+      const res = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageDataUrl: bgImage.src,
+          annotations
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
 
-    annotations.forEach(a => drawBox(oc, a, iw, ih, false));
+      const fullUrl = location.origin + data.url;
 
-    offscreen.toBlob(blob => {
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.download = `주석_${Date.now()}.png`;
-      link.href = url;
-      link.click();
-      URL.revokeObjectURL(url);
-    }, 'image/png');
+      // Copy to clipboard
+      try { await navigator.clipboard.writeText(fullUrl); } catch {}
+
+      // Show modal with link
+      showShareModal(fullUrl);
+    } catch (e) {
+      alert('링크 생성에 실패했습니다: ' + e.message);
+    } finally {
+      btnExport.disabled = false;
+      btnExport.textContent = '공유 링크 생성';
+    }
   });
+
+  function showShareModal(url) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:12px;padding:28px;max-width:480px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.3)">
+        <h3 style="font-size:1rem;font-weight:700;color:#1a1a2e;margin-bottom:8px">🔗 공유 링크가 생성되었습니다</h3>
+        <p style="font-size:.82rem;color:#718096;margin-bottom:16px">링크를 통해 주석 내용을 읽기 전용으로 확인할 수 있습니다. (클립보드에 복사됨)</p>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="share-url-input" value="${url}" readonly
+            style="flex:1;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;font-size:.82rem;color:#2d3748;background:#f8f9fa;outline:none" />
+          <button id="copy-btn"
+            style="padding:8px 14px;background:#1a1a2e;color:#fff;border:none;border-radius:6px;font-size:.82rem;cursor:pointer;white-space:nowrap">복사</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+          <button id="open-btn"
+            style="padding:8px 14px;background:#4299e1;color:#fff;border:none;border-radius:6px;font-size:.82rem;cursor:pointer">새 탭에서 열기</button>
+          <button id="close-modal-btn"
+            style="padding:8px 14px;background:#e2e8f0;color:#2d3748;border:none;border-radius:6px;font-size:.82rem;cursor:pointer">닫기</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#copy-btn').addEventListener('click', async () => {
+      await navigator.clipboard.writeText(url).catch(() => {});
+      overlay.querySelector('#copy-btn').textContent = '복사됨 ✓';
+    });
+    overlay.querySelector('#open-btn').addEventListener('click', () => window.open(url, '_blank'));
+    overlay.querySelector('#close-modal-btn').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  }
 })();
 </script>
 </body>
