@@ -73,7 +73,7 @@
       top: 0; left: 0;
       width: 100%;
       height: 100%;
-      pointer-events: none;
+      cursor: pointer;
     }
 
     /* Sidebar */
@@ -354,6 +354,43 @@
     });
     annotCount.textContent = `${annotations.length}개`;
   }
+
+  function getAnnotationAt(x, y) {
+    const cw = drawCanvas.width, ch = drawCanvas.height;
+    for (let i = annotations.length - 1; i >= 0; i--) {
+      const a = annotations[i];
+      if (x >= a.x * cw && x <= (a.x + a.width) * cw &&
+          y >= a.y * ch && y <= (a.y + a.height) * ch) return a;
+    }
+    return null;
+  }
+
+  drawCanvas.addEventListener('mousemove', e => {
+    const rect = drawCanvas.getBoundingClientRect();
+    const found = getAnnotationAt(e.clientX - rect.left, e.clientY - rect.top);
+    drawCanvas.style.cursor = found ? 'pointer' : 'default';
+    if ((found?.id ?? null) !== hoveredId) {
+      hoveredId = found?.id ?? null;
+      render();
+      updateHover();
+    }
+  });
+
+  drawCanvas.addEventListener('mouseleave', () => {
+    hoveredId = null; render(); updateHover();
+  });
+
+  drawCanvas.addEventListener('click', e => {
+    const rect = drawCanvas.getBoundingClientRect();
+    const found = getAnnotationAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (!found) return;
+    const card = document.querySelector(`.comment-card[data-id="${found.id}"]`);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      card.classList.add('highlighted');
+      setTimeout(() => card.classList.remove('highlighted'), 1500);
+    }
+  });
 
   function updateHover() {
     document.querySelectorAll('.comment-card').forEach(c => {
