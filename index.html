@@ -365,8 +365,11 @@
       bgImage.onload = () => {
         uploadPlaceholder.style.display = 'none';
         imageWrapper.classList.remove('no-image');
-        syncCanvasSize();
-        render();
+        // Wait two frames so the browser finishes layout before reading offsetWidth/offsetHeight
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          syncCanvasSize();
+          render();
+        }));
       };
     };
     img.src = url;
