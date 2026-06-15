@@ -12,7 +12,8 @@
       background: #f0f2f5;
       display: flex;
       flex-direction: column;
-      min-height: 100vh;
+      height: 100vh;
+      overflow: hidden;
     }
 
     header {
@@ -359,13 +360,14 @@
   }
 
   function scrollImageToAnnotation(a) {
-    const cw = drawCanvas.width, ch = drawCanvas.height;
-    const boxTop = a.y * ch;
+    const ch = drawCanvas.height;
     const boxCenterY = (a.y + a.height / 2) * ch;
     const canvasArea = document.getElementById('canvas-area');
 
-    // Get canvas top relative to canvas-area scroll container
-    const wrapperTop = imageWrapper.offsetTop;
+    // Position of imageWrapper top relative to canvasArea's scrollable content
+    const wrapperTop = imageWrapper.getBoundingClientRect().top
+                     - canvasArea.getBoundingClientRect().top
+                     + canvasArea.scrollTop;
     const targetScrollTop = wrapperTop + boxCenterY - canvasArea.clientHeight / 2;
     canvasArea.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
 
@@ -418,11 +420,15 @@
     clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => {
       const canvasArea = document.getElementById('canvas-area');
-      const areaRect = canvasArea.getBoundingClientRect();
-      const cw = drawCanvas.width, ch = drawCanvas.height;
+      const ch = drawCanvas.height;
 
-      // Find the annotation whose center is closest to the middle of the visible area
-      const visibleMidY = canvasArea.scrollTop + canvasArea.clientHeight / 2 - imageWrapper.offsetTop;
+      // Visible mid Y relative to the image top
+      const wrapperTop = imageWrapper.getBoundingClientRect().top
+                       - canvasArea.getBoundingClientRect().top
+                       + canvasArea.scrollTop;
+      const visibleMidY = canvasArea.scrollTop + canvasArea.clientHeight / 2 - wrapperTop;
+
+      // Find annotation whose center is closest to the screen midpoint
       let closest = null, minDist = Infinity;
       annotations.forEach(a => {
         const boxCenterY = (a.y + a.height / 2) * ch;
