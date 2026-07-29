@@ -219,6 +219,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', -appl
 .annotate-image-wrapper { position: relative; display: inline-block; box-shadow: 0 4px 24px rgba(0,0,0,.4); border-radius: 4px; overflow: hidden; line-height: 0; }
 .annotate-image-wrapper.no-image { display: none; }
 #annotBgImage { display: block; max-width: 100%; user-select: none; pointer-events: none; }
+#annotBgFrame { display: block; pointer-events: none; background: #fff; }
 #annotDrawCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair; }
 .annotate-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text3); cursor: pointer; width: 400px; height: 280px; border: 2px dashed var(--border); border-radius: 12px; background: var(--bg2); transition: all .2s; position: relative; }
 .annotate-placeholder:hover { border-color: var(--accent); color: var(--text2); }
@@ -496,7 +497,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', -appl
       <div class="annotate-sep"></div>
       <button class="annotate-upload-btn" id="annotAddBtn">➕ 이미지 추가</button>
       <button class="annotate-upload-btn" id="annotChangeBtn">🖼 현재 변경</button>
-      <input type="file" id="annotFileInput" accept="image/*" multiple style="display:none">
+      <input type="file" id="annotFileInput" accept="image/*,.html,.htm,.css,.js,.ts,.jsx,.tsx,.vue,.txt" multiple style="display:none">
       <div class="annot-page-nav" id="annotPageNav" style="display:none">
         <button class="annot-page-nav-btn" id="annotPrevBtn" disabled title="이전 이미지">◀</button>
         <span class="annot-page-label" id="annotPageLabel">1 / 1</span>
@@ -512,11 +513,12 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', -appl
       <div class="annotate-canvas-area" id="annotCanvasArea">
         <div class="annotate-placeholder" id="annotPlaceholder">
           <div class="ph-icon">📁</div>
-          <div class="ph-text">클릭하여 이미지 업로드</div>
-          <input type="file" id="annotInitFileInput" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
+          <div class="ph-text">클릭하여 이미지 / HTML / 소스코드 업로드</div>
+          <input type="file" id="annotInitFileInput" accept="image/*,.html,.htm,.css,.js,.ts,.jsx,.tsx,.vue,.txt" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
         </div>
         <div class="annotate-image-wrapper no-image" id="annotImageWrapper">
           <img id="annotBgImage" alt="상세페이지" draggable="false" />
+          <iframe id="annotBgFrame" style="display:none;border:none;width:100%;min-height:600px;" scrolling="no"></iframe>
           <canvas id="annotDrawCanvas"></canvas>
         </div>
       </div>
@@ -1482,12 +1484,22 @@ function renderCompareResult(result) {
   var imageLoaded = false;
 
   var annotBgImage = document.getElementById('annotBgImage');
+  var annotBgFrame = document.getElementById('annotBgFrame');
   var annotDrawCanvas = document.getElementById('annotDrawCanvas');
   var annotCtx = annotDrawCanvas.getContext('2d');
   var annotImageWrapper = document.getElementById('annotImageWrapper');
   var annotPlaceholder = document.getElementById('annotPlaceholder');
   var annotList = document.getElementById('annotList');
   var annotCountEl = document.getElementById('annotCount');
+
+  var SOURCE_EXTS = ['html','htm','css','js','ts','jsx','tsx','vue','txt'];
+  function isSourceFile(name) {
+    var ext = name.split('.').pop().toLowerCase();
+    return SOURCE_EXTS.indexOf(ext) >= 0;
+  }
+  function getContentEl() {
+    return annotBgImage.style.display !== 'none' ? annotBgImage : annotBgFrame;
+  }
 
   // ── 대시보드 ──
   function showDashboard() {
@@ -1629,7 +1641,7 @@ function renderCompareResult(result) {
       .then(function(p) {
         var rd = p.rounds && p.rounds[round];
         pages = rd && rd.pages ? rd.pages.map(function(pg) {
-          return { imageDataUrl: pg.imageDataUrl, annotations: pg.annotations || [], nextNum: pg.nextNum || 1 };
+          return { imageDataUrl: pg.imageDataUrl, type: pg.type || 'image', name: pg.name || '', annotations: pg.annotations || [], nextNum: pg.nextNum || 1 };
         }) : [];
         currentPageIdx = -1;
         imageLoaded = false;
@@ -1737,11 +1749,15 @@ function renderCompareResult(result) {
       reader.onerror = function() { alert('파일을 읽을 수 없습니다: ' + file.name); next(); };
       reader.onload = function(e) {
         saveCurrent();
+        var src = isSourceFile(file.name) ? e.target.result : e.target.result;
+        var pageType = isSourceFile(file.name) ? 'source' : 'image';
         if (append || pages.length === 0) {
-          pages.push({ imageDataUrl: e.target.result, annotations: [], nextNum: 1 });
+          pages.push({ imageDataUrl: e.target.result, type: pageType, name: file.name, annotations: [], nextNum: 1 });
           switchPage(pages.length - 1, function() { next(); });
         } else {
           pages[currentPageIdx].imageDataUrl = e.target.result;
+          pages[currentPageIdx].type = pageType;
+          pages[currentPageIdx].name = file.name;
           switchPage(currentPageIdx, function() { next(); });
         }
       };
@@ -1763,7 +1779,7 @@ function renderCompareResult(result) {
     annotations = page.annotations.slice();
     annotNextNum = page.nextNum;
 
-    annotBgImage.onload = function() {
+    function afterLoad() {
       imageLoaded = true;
       annotPlaceholder.style.display = 'none';
       annotImageWrapper.classList.remove('no-image');
@@ -1775,9 +1791,29 @@ function renderCompareResult(result) {
         buildThumbStrip();
         if (onLoaded) onLoaded();
       }); });
-    };
-    annotBgImage.onerror = function() { alert('이미지를 표시할 수 없습니다.'); };
-    annotBgImage.src = page.imageDataUrl;
+    }
+
+    if (page.type === 'source') {
+      // HTML / 소스코드 파일 → iframe으로 표시
+      annotBgImage.style.display = 'none';
+      annotBgFrame.style.display = 'block';
+      annotBgFrame.onload = function() {
+        // iframe 높이를 내용에 맞게 자동 조정 (동일 출처인 data: URL)
+        try {
+          var h = annotBgFrame.contentDocument.documentElement.scrollHeight;
+          if (h > 200) annotBgFrame.style.height = h + 'px';
+        } catch(e) { annotBgFrame.style.height = '800px'; }
+        afterLoad();
+      };
+      annotBgFrame.src = page.imageDataUrl;
+    } else {
+      // 이미지 파일 → img 태그로 표시
+      annotBgFrame.style.display = 'none';
+      annotBgImage.style.display = 'block';
+      annotBgImage.onload = afterLoad;
+      annotBgImage.onerror = function() { alert('이미지를 표시할 수 없습니다.'); };
+      annotBgImage.src = page.imageDataUrl;
+    }
   }
 
   function buildPageNav() {
@@ -1796,13 +1832,20 @@ function renderCompareResult(result) {
     pages.forEach(function(p, i) {
       var thumb = document.createElement('div');
       thumb.className = 'annot-page-thumb' + (i === currentPageIdx ? ' active' : '');
-      thumb.title = '이미지 ' + (i + 1);
-      var img = document.createElement('img');
-      img.src = p.imageDataUrl;
+      thumb.title = (p.name || ('파일 ' + (i + 1)));
+      if (p.type === 'source') {
+        var icon = document.createElement('div');
+        icon.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:20px;background:var(--bg3);';
+        icon.textContent = '📄';
+        thumb.appendChild(icon);
+      } else {
+        var img = document.createElement('img');
+        img.src = p.imageDataUrl;
+        thumb.appendChild(img);
+      }
       var num = document.createElement('span');
       num.className = 'thumb-num';
       num.textContent = i + 1;
-      thumb.appendChild(img);
       thumb.appendChild(num);
       thumb.addEventListener('click', function() { switchPage(i); });
       strip.appendChild(thumb);
@@ -1810,8 +1853,9 @@ function renderCompareResult(result) {
   }
 
   function syncAnnotCanvas() {
-    annotDrawCanvas.width = annotBgImage.offsetWidth;
-    annotDrawCanvas.height = annotBgImage.offsetHeight;
+    var el = getContentEl();
+    annotDrawCanvas.width = el.offsetWidth;
+    annotDrawCanvas.height = el.offsetHeight;
   }
 
   window.addEventListener('resize', function() {
