@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const PORT = process.env.PORT || 8080;
 const KEY_FILE = path.join(__dirname, 'apikey.txt');
 const PRODUCTS_FILE = path.join(__dirname, 'products.json');
+const SHARES_FILE = path.join(__dirname, 'shares.json');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -30,6 +31,20 @@ function saveProducts() {
   catch (e) { console.error('products.json 저장 실패:', e.message); }
 }
 const products = loadProducts();
+
+// ── Shares store (file-based, permanent) ──
+function loadShares() {
+  try {
+    if (fs.existsSync(SHARES_FILE))
+      return JSON.parse(fs.readFileSync(SHARES_FILE, 'utf8'));
+  } catch (e) { console.error('shares.json 로드 실패:', e.message); }
+  return {};
+}
+function saveShares() {
+  try { fs.writeFileSync(SHARES_FILE, JSON.stringify(shares), 'utf8'); }
+  catch (e) { console.error('shares.json 저장 실패:', e.message); }
+}
+const shares = loadShares();
 
 function collectBody(req, cb) {
   const chunks = [];
@@ -157,6 +172,67 @@ const server = http.createServer((req, res) => {
       r.end();
     }
     fetchImage(imgUrl, 5);
+    return;
+  }
+
+  // ════════════════════════════════
+  //  SHARES API
+  // ════════════════════════════════
+
+  // 공유 링크 생성
+  if (pathname === '/api/share' && req.method === 'POST') {
+    collectBody(req, (err, body) => {
+      if (err) { json(500, { error: err.message }); return; }
+      try {
+        const { pages } = JSON.parse(body);
+        const id = crypto.randomUUID();
+        const thumb = pages && pages[0] && pages[0].imageDataUrl ? pages[0].imageDataUrl.slice(0, 200) + '...' : null;
+        const pageCount = pages ? pages.length : 0;
+        const annotationCount = pages ? pages.reduce((s, p) => s + (p.annotations || []).length, 0) : 0;
+        shares[id] = { id, pages: pages || [], createdAt: Date.now(), pageCount, annotationCount, thumb: pages && pages[0] ? pages[0].imageDataUrl : null };
+        saveShares();
+        json(200, { url: '/view/' + id });
+      } catch (e) { json(400, { error: e.message }); }
+    });
+    return;
+  }
+
+  // 공유 이력 목록
+  if (pathname === '/api/shares' && req.method === 'GET') {
+    const list = Object.values(shares).map(s => ({
+      id: s.id,
+      createdAt: s.createdAt,
+      pageCount: s.pageCount || 0,
+      annotationCount: s.annotationCount || 0,
+      thumb: s.thumb
+    })).sort((a, b) => b.createdAt - a.createdAt);
+    json(200, list);
+    return;
+  }
+
+  // 공유 이력 삭제
+  const shareDelMatch = pathname.match(/^\/api\/shares\/([^/]+)$/);
+  if (shareDelMatch && req.method === 'DELETE') {
+    const id = shareDelMatch[1];
+    if (shares[id]) { delete shares[id]; saveShares(); }
+    json(200, { ok: true });
+    return;
+  }
+
+  // 공유 뷰어 데이터
+  const viewMatch = pathname.match(/^\/api\/view\/([^/]+)$/);
+  if (viewMatch && req.method === 'GET') {
+    const id = viewMatch[1];
+    if (!shares[id]) { json(404, { error: '공유 링크를 찾을 수 없습니다.' }); return; }
+    json(200, shares[id]);
+    return;
+  }
+
+  // 공유 뷰어 페이지
+  if (pathname.match(/^\/view\/[^/]+$/) && !pathname.startsWith('/view/product/') && req.method === 'GET') {
+    const vp = path.join(__dirname, 'viewer.html');
+    if (fs.existsSync(vp)) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); fs.createReadStream(vp).pipe(res); }
+    else { res.writeHead(404); res.end('viewer.html not found'); }
     return;
   }
 
