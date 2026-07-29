@@ -6,9 +6,10 @@ const url = require('url');
 const crypto = require('crypto');
 
 const PORT = process.env.PORT || 8080;
-const KEY_FILE = path.join(__dirname, 'apikey.txt');
-const PRODUCTS_FILE = path.join(__dirname, 'products.json');
-const SHARES_FILE = path.join(__dirname, 'shares.json');
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+const KEY_FILE = path.join(DATA_DIR, 'apikey.txt');
+const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
+const SHARES_FILE = path.join(DATA_DIR, 'shares.json');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',

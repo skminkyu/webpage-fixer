@@ -1745,25 +1745,94 @@ function renderCompareResult(result) {
     function next() {
       if (idx >= files.length) return;
       var file = files[idx++];
-      var reader = new FileReader();
-      reader.onerror = function() { alert('파일을 읽을 수 없습니다: ' + file.name); next(); };
-      reader.onload = function(e) {
-        saveCurrent();
-        var src = isSourceFile(file.name) ? e.target.result : e.target.result;
-        var pageType = isSourceFile(file.name) ? 'source' : 'image';
-        if (append || pages.length === 0) {
-          pages.push({ imageDataUrl: e.target.result, type: pageType, name: file.name, annotations: [], nextNum: 1 });
-          switchPage(pages.length - 1, function() { next(); });
-        } else {
-          pages[currentPageIdx].imageDataUrl = e.target.result;
-          pages[currentPageIdx].type = pageType;
-          pages[currentPageIdx].name = file.name;
-          switchPage(currentPageIdx, function() { next(); });
-        }
-      };
-      reader.readAsDataURL(file);
+      var ext = file.name.split('.').pop().toLowerCase();
+
+      if (ext === 'html' || ext === 'htm') {
+        // HTML 파일 → img 태그 추출 후 프록시로 이미지 로드
+        var tr = new FileReader();
+        tr.onerror = function() { alert('파일을 읽을 수 없습니다: ' + file.name); next(); };
+        tr.onload = function(e) {
+          var html = e.target.result;
+          var imgRegex = /<img[^>]+src=["']([^"']+)["']/gi;
+          var urls = [], m;
+          while ((m = imgRegex.exec(html)) !== null) urls.push(m[1]);
+          if (urls.length > 0) {
+            loadImagesFromUrls(urls, file.name, next);
+          } else {
+            // img 없으면 소스코드로 표시
+            var fr = new FileReader();
+            fr.onload = function(ev) {
+              saveCurrent();
+              pages.push({ imageDataUrl: ev.target.result, type: 'source', name: file.name, annotations: [], nextNum: 1 });
+              switchPage(pages.length - 1, next);
+            };
+            fr.readAsDataURL(file);
+          }
+        };
+        tr.readAsText(file);
+      } else {
+        var reader = new FileReader();
+        reader.onerror = function() { alert('파일을 읽을 수 없습니다: ' + file.name); next(); };
+        reader.onload = function(e) {
+          saveCurrent();
+          var pageType = isSourceFile(file.name) ? 'source' : 'image';
+          if (append || pages.length === 0) {
+            pages.push({ imageDataUrl: e.target.result, type: pageType, name: file.name, annotations: [], nextNum: 1 });
+            switchPage(pages.length - 1, next);
+          } else {
+            pages[currentPageIdx].imageDataUrl = e.target.result;
+            pages[currentPageIdx].type = pageType;
+            pages[currentPageIdx].name = file.name;
+            switchPage(currentPageIdx, next);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
     next();
+  }
+
+  // HTML 파일에서 추출한 이미지 URL들을 프록시로 순서대로 로드
+  function loadImagesFromUrls(urls, fileName, onDone) {
+    var total = urls.length;
+    var loaded = 0;
+    var results = new Array(total).fill(null);
+
+    setSaveStatus('HTML 이미지 불러오는 중 (0/' + total + ')...');
+
+    urls.forEach(function(imgUrl, i) {
+      fetch('/fetch-image?url=' + encodeURIComponent(imgUrl))
+        .then(function(r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.blob();
+        })
+        .then(function(blob) {
+          return new Promise(function(resolve) {
+            var fr = new FileReader();
+            fr.onload = function(ev) { resolve(ev.target.result); };
+            fr.onerror = function() { resolve(null); };
+            fr.readAsDataURL(blob);
+          });
+        })
+        .catch(function() { return null; })
+        .then(function(dataUrl) {
+          results[i] = dataUrl;
+          loaded++;
+          setSaveStatus('HTML 이미지 불러오는 중 (' + loaded + '/' + total + ')...');
+          if (loaded === total) {
+            var startIdx = pages.length;
+            results.forEach(function(dataUrl, i) {
+              if (!dataUrl) return;
+              pages.push({ imageDataUrl: dataUrl, type: 'image', name: fileName + ' (' + (i+1) + ')', annotations: [], nextNum: 1 });
+            });
+            setSaveStatus('');
+            if (pages.length > startIdx) switchPage(startIdx, onDone);
+            else if (onDone) onDone();
+          }
+        });
+    });
+
+    if (total === 0 && onDone) onDone();
   }
 
   function saveCurrent() {
