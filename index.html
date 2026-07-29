@@ -482,10 +482,8 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', -appl
     <div class="annot-editor-hdr">
       <button class="annot-back-btn" id="annotBackBtn">← 목록</button>
       <div class="annot-product-title-el" id="annotProductTitle"></div>
-      <div class="annot-round-tabs">
-        <button class="annot-round-tab active" id="annotRoundTab1" data-round="1">1차</button>
-        <button class="annot-round-tab" id="annotRoundTab2" data-round="2">2차</button>
-      </div>
+      <div class="annot-round-tabs" id="annotRoundTabs"></div>
+      <button class="annotate-upload-btn" id="annotAddRoundBtn" title="차수 추가">+ 차수 추가</button>
       <div class="annotate-sep"></div>
       <span class="annotate-toolbar-label">색상</span>
       <div class="color-picker-group" id="annotColorPicker">
@@ -1498,13 +1496,17 @@ function renderCompareResult(result) {
     loadProductList();
   }
 
-  function showEditor(productId, productName, round) {
+  function showEditor(productId, productName, round, existingRounds) {
     currentProductId = productId;
     currentRound = round || '1';
+    // 기존 차수 목록 복원 (최소 1,2차 보장)
+    var keys = existingRounds ? Object.keys(existingRounds).map(Number).filter(function(n) { return !isNaN(n); }).sort(function(a,b){return a-b;}).map(String) : [];
+    roundList = keys.length >= 2 ? keys : ['1', '2'];
+    if (roundList.indexOf(currentRound) < 0) roundList.push(currentRound);
     document.getElementById('annotDashboard').style.display = 'none';
     document.getElementById('annotEditor').style.display = '';
     document.getElementById('annotProductTitle').textContent = productName;
-    setRoundTab(currentRound);
+    buildRoundTabs();
     loadRoundData(productId, currentRound);
   }
 
@@ -1537,10 +1539,10 @@ function renderCompareResult(result) {
               '<button class="btn-del-p">🗑</button>' +
             '</div>';
           card.querySelector('[data-round="1"]').addEventListener('click', function(e) {
-            e.stopPropagation(); showEditor(p.id, p.name, '1');
+            e.stopPropagation(); showEditor(p.id, p.name, '1', p.rounds);
           });
           card.querySelector('[data-round="2"]').addEventListener('click', function(e) {
-            e.stopPropagation(); showEditor(p.id, p.name, '2');
+            e.stopPropagation(); showEditor(p.id, p.name, '2', p.rounds);
           });
           card.querySelector('.btn-share-p').addEventListener('click', function(e) {
             e.stopPropagation();
@@ -1584,24 +1586,40 @@ function renderCompareResult(result) {
     showDashboard();
   });
 
-  // ── 차수 탭 ──
-  function setRoundTab(round) {
-    currentRound = round;
-    document.getElementById('annotRoundTab1').classList.toggle('active', round === '1');
-    document.getElementById('annotRoundTab2').classList.toggle('active', round === '2');
+  // ── 차수 탭 (동적) ──
+  var roundList = ['1', '2']; // 기본 1차, 2차
+
+  function buildRoundTabs() {
+    var container = document.getElementById('annotRoundTabs');
+    container.innerHTML = '';
+    roundList.forEach(function(r) {
+      var btn = document.createElement('button');
+      btn.className = 'annot-round-tab' + (r === currentRound ? ' active' : '');
+      btn.textContent = r + '차';
+      btn.dataset.round = r;
+      btn.addEventListener('click', function() {
+        if (currentRound === r) return;
+        saveCurrent();
+        currentRound = r;
+        buildRoundTabs();
+        loadRoundData(currentProductId, r);
+      });
+      container.appendChild(btn);
+    });
   }
 
-  document.getElementById('annotRoundTab1').addEventListener('click', function() {
-    if (currentRound === '1') return;
+  function setRoundTab(round) {
+    currentRound = round;
+    buildRoundTabs();
+  }
+
+  document.getElementById('annotAddRoundBtn').addEventListener('click', function() {
+    var next = String(roundList.length + 1);
+    roundList.push(next);
     saveCurrent();
-    setRoundTab('1');
-    loadRoundData(currentProductId, '1');
-  });
-  document.getElementById('annotRoundTab2').addEventListener('click', function() {
-    if (currentRound === '2') return;
-    saveCurrent();
-    setRoundTab('2');
-    loadRoundData(currentProductId, '2');
+    currentRound = next;
+    buildRoundTabs();
+    loadRoundData(currentProductId, next);
   });
 
   function loadRoundData(productId, round) {

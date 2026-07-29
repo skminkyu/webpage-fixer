@@ -301,7 +301,7 @@ const server = http.createServer((req, res) => {
   }
 
   // 차수 저장
-  const roundMatch = pathname.match(/^\/api\/products\/([^/]+)\/rounds\/([12])$/);
+  const roundMatch = pathname.match(/^\/api\/products\/([^/]+)\/rounds\/(\d+)$/);
   if (roundMatch && req.method === 'PUT') {
     const [, id, round] = roundMatch;
     if (!products[id]) { json(404, { error: '제품을 찾을 수 없습니다.' }); return; }
