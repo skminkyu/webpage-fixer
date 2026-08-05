@@ -497,7 +497,9 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', -appl
       <div class="annotate-sep"></div>
       <button class="annotate-upload-btn" id="annotAddBtn">➕ 이미지 추가</button>
       <button class="annotate-upload-btn" id="annotChangeBtn">🖼 현재 변경</button>
-      <input type="file" id="annotFileInput" accept="image/*,.html,.htm,.css,.js,.ts,.jsx,.tsx,.vue,.txt" multiple style="display:none">
+      <input type="file" id="annotFileInput" accept="image/*,.avif,.html,.htm,.css,.js,.ts,.jsx,.tsx,.vue,.txt" multiple style="display:none">
+      <input type="text" id="annotUrlInput" placeholder="이미지 URL 붙여넣기..." style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px;width:220px;outline:none;">
+      <button class="annotate-upload-btn" id="annotUrlAddBtn">URL 추가</button>
       <div class="annot-page-nav" id="annotPageNav" style="display:none">
         <button class="annot-page-nav-btn" id="annotPrevBtn" disabled title="이전 이미지">◀</button>
         <span class="annot-page-label" id="annotPageLabel">1 / 1</span>
@@ -514,7 +516,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', -appl
         <div class="annotate-placeholder" id="annotPlaceholder">
           <div class="ph-icon">📁</div>
           <div class="ph-text">클릭하여 이미지 / HTML / 소스코드 업로드</div>
-          <input type="file" id="annotInitFileInput" accept="image/*,.html,.htm,.css,.js,.ts,.jsx,.tsx,.vue,.txt" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
+          <input type="file" id="annotInitFileInput" accept="image/*,.avif,.html,.htm,.css,.js,.ts,.jsx,.tsx,.vue,.txt" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
         </div>
         <div class="annotate-image-wrapper no-image" id="annotImageWrapper">
           <img id="annotBgImage" alt="상세페이지" draggable="false" />
@@ -1695,6 +1697,59 @@ function renderCompareResult(result) {
     }).catch(function() {
       window.open(url, '_blank');
     });
+  });
+
+  // ── URL로 이미지 추가 ──
+  function addAnnotImageUrl() {
+    var raw = document.getElementById('annotUrlInput').value.trim();
+    if (!raw) return;
+    document.getElementById('annotUrlInput').value = '';
+
+    // CDN 프록시 URL에서 원본 URL 추출 (광고 검수와 동일 로직)
+    var proxyMatch = raw.match(/\/proxy\/src\/(https?:\/\/.+?)(?:\/hdims\/|\/format\/|\/optimize|$)/);
+    if (proxyMatch) {
+      raw = proxyMatch[1];
+    } else {
+      raw = raw.replace(/\/hdims\/.*$/, '')
+               .replace(/\/format\/[^?#]*/, '')
+               .replace(/\/optimize[^?#]*/, '');
+    }
+
+    var name = raw.split('/').pop().split('?')[0] || 'url-image.jpg';
+    if (name.length > 60) name = name.slice(0, 60);
+
+    setSaveStatus('URL 이미지 로드 중...');
+    fetch('/fetch-image?url=' + encodeURIComponent(raw))
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.blob();
+      })
+      .then(function(blob) {
+        var imgType = blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
+        if (!blob.type.startsWith('image/') && blob.type !== 'application/octet-stream' && blob.type !== '') {
+          throw new Error('이미지가 아닌 응답: ' + blob.type);
+        }
+        return new Promise(function(resolve) {
+          var fr = new FileReader();
+          fr.onload = function(ev) { resolve({ dataUrl: ev.target.result, type: imgType }); };
+          fr.readAsDataURL(new File([blob], name, { type: imgType }));
+        });
+      })
+      .then(function(result) {
+        saveCurrent();
+        pages.push({ imageDataUrl: result.dataUrl, type: 'image', name: name, annotations: [], nextNum: 1 });
+        setSaveStatus('');
+        switchPage(pages.length - 1);
+      })
+      .catch(function(e) {
+        setSaveStatus('');
+        alert('이미지 로드 실패: ' + e.message + '\n\n이미지 직접 주소인지 확인하세요.');
+      });
+  }
+
+  document.getElementById('annotUrlAddBtn').addEventListener('click', addAnnotImageUrl);
+  document.getElementById('annotUrlInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') addAnnotImageUrl();
   });
 
   // ── 색상 ──
