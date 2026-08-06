@@ -1543,33 +1543,32 @@ function renderCompareResult(result) {
         }
         grid.innerHTML = '';
         list.forEach(function(p) {
-          var r1 = p.rounds && p.rounds['1'];
-          var r2 = p.rounds && p.rounds['2'];
+          var rounds = p.rounds || {};
+          var roundKeys = Object.keys(rounds).filter(function(r) { return r !== 'null'; }).sort(function(a, b) { return Number(a) - Number(b); });
+          if (roundKeys.length === 0) roundKeys = ['1', '2'];
           var card = document.createElement('div');
           card.className = 'annot-product-card';
-          var r1done = r1 && r1.completed;
-          var r2done = r2 && r2.completed;
+          var editColors = ['var(--accent)', 'var(--green)', '#f59e0b', '#ec4899', '#8b5cf6'];
+          var badgesHtml = roundKeys.map(function(r) {
+            var rd = rounds[r]; var done = rd && rd.completed;
+            return '<span class="annot-round-badge ' + (done ? 'completed' : rd ? 'done' : 'empty') + '">' + r + '차 ' + (done ? '✅ 완료' : rd ? rd.pageCount + '장 · ' + rd.annotCount + '주석' : '미작성') + '</span>';
+          }).join('');
+          var editBtnsHtml = roundKeys.map(function(r, i) {
+            return '<button class="btn-edit-p" data-edit-round="' + r + '" style="background:' + editColors[i % editColors.length] + '">' + r + '차 편집</button>';
+          }).join('');
+          var completeBtnsHtml = roundKeys.map(function(r) {
+            var done = rounds[r] && rounds[r].completed;
+            return '<button class="btn-complete-p ' + (done ? 'on' : 'off') + '" data-complete-round="' + r + '" data-complete-val="' + (done ? '0' : '1') + '">' + (done ? '✅ ' + r + '차 완료됨 (취소)' : '○ ' + r + '차 완료 처리') + '</button>';
+          }).join('');
           card.innerHTML =
             '<div class="annot-product-name" title="' + escHtml(p.name) + '">' + escHtml(p.name) + '</div>' +
-            '<div class="annot-product-rounds">' +
-              '<span class="annot-round-badge ' + (r1done ? 'completed' : r1 ? 'done' : 'empty') + '">1차 ' + (r1done ? '✅ 완료' : r1 ? r1.pageCount + '장 · ' + r1.annotCount + '주석' : '미작성') + '</span>' +
-              '<span class="annot-round-badge ' + (r2done ? 'completed' : r2 ? 'done' : 'empty') + '">2차 ' + (r2done ? '✅ 완료' : r2 ? r2.pageCount + '장 · ' + r2.annotCount + '주석' : '미작성') + '</span>' +
-            '</div>' +
-            '<div class="annot-product-actions">' +
-              '<button class="btn-edit-p" data-round="1">1차 편집</button>' +
-              '<button class="btn-edit-p" data-round="2" style="background:var(--green)">2차 편집</button>' +
-              '<button class="btn-share-p">🔗</button>' +
-              '<button class="btn-del-p">🗑</button>' +
-            '</div>' +
-            '<div class="annot-complete-row">' +
-              '<button class="btn-complete-p ' + (r1done ? 'on' : 'off') + '" data-complete-round="1" data-complete-val="' + (r1done ? '0' : '1') + '">' + (r1done ? '✅ 1차 완료됨 (취소)' : '○ 1차 완료 처리') + '</button>' +
-              '<button class="btn-complete-p ' + (r2done ? 'on' : 'off') + '" data-complete-round="2" data-complete-val="' + (r2done ? '0' : '1') + '">' + (r2done ? '✅ 2차 완료됨 (취소)' : '○ 2차 완료 처리') + '</button>' +
-            '</div>';
-          card.querySelector('[data-round="1"]').addEventListener('click', function(e) {
-            e.stopPropagation(); showEditor(p.id, p.name, '1', p.rounds);
-          });
-          card.querySelector('[data-round="2"]').addEventListener('click', function(e) {
-            e.stopPropagation(); showEditor(p.id, p.name, '2', p.rounds);
+            '<div class="annot-product-rounds">' + badgesHtml + '</div>' +
+            '<div class="annot-product-actions">' + editBtnsHtml + '<button class="btn-share-p">🔗</button><button class="btn-del-p">🗑</button></div>' +
+            '<div class="annot-complete-row">' + completeBtnsHtml + '</div>';
+          card.querySelectorAll('[data-edit-round]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+              e.stopPropagation(); showEditor(p.id, p.name, btn.dataset.editRound, p.rounds);
+            });
           });
           card.querySelector('.btn-share-p').addEventListener('click', function(e) {
             e.stopPropagation();

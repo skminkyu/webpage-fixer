@@ -249,7 +249,11 @@ const server = http.createServer((req, res) => {
         const rd = p.rounds[r];
         return { updatedAt: rd.updatedAt, pageCount: (rd.pages||[]).length, annotCount: (rd.pages||[]).reduce((s,pg) => s + (pg.annotations||[]).length, 0), completed: !!rd.completed };
       };
-      return { id, name: p.name, createdAt: p.createdAt, rounds: { 1: meta(1), 2: meta(2) } };
+      const rounds = {};
+      Object.keys(p.rounds || {}).sort((a, b) => Number(a) - Number(b)).forEach(r => { rounds[r] = meta(r); });
+      if (!rounds['1']) rounds['1'] = null;
+      if (!rounds['2']) rounds['2'] = null;
+      return { id, name: p.name, createdAt: p.createdAt, rounds };
     }).sort((a, b) => b.createdAt - a.createdAt);
     json(200, list);
     return;
