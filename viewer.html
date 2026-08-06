@@ -15,6 +15,7 @@
     .round-tab { padding: 5px 14px; font-size: .82rem; font-weight: 600; border-radius: 6px; cursor: pointer; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: rgba(255,255,255,.7); transition: all .15s; }
     .round-tab.active { background: #5b8af5; border-color: #5b8af5; color: #fff; }
     .round-tab:disabled { opacity: .35; cursor: default; }
+    .confirmed-badge { background: #5b8af5; color: #fff; font-size: .7rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; white-space: nowrap; }
     .page-nav { display: flex; align-items: center; gap: 5px; }
     .page-nav-btn { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); color: #fff; width: 28px; height: 28px; border-radius: 5px; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; transition: background .15s; }
     .page-nav-btn:hover:not(:disabled) { background: rgba(255,255,255,.22); }
@@ -128,6 +129,10 @@
         document.title = data.name || '검토 결과';
         roundData[1] = (data.rounds && data.rounds[1] && data.rounds[1].pages) || [];
         roundData[2] = (data.rounds && data.rounds[2] && data.rounds[2].pages) || [];
+        roundData.completed = {
+          1: !!(data.rounds && data.rounds[1] && data.rounds[1].completed),
+          2: !!(data.rounds && data.rounds[2] && data.rounds[2].completed)
+        };
 
         // Show round tabs only if at least one round has data
         const hasData = roundData[1].length > 0 || roundData[2].length > 0;
@@ -170,6 +175,16 @@
     if (isProduct) {
       document.getElementById('viewRoundTab1').classList.toggle('active', round === 1);
       document.getElementById('viewRoundTab2').classList.toggle('active', round === 2);
+      // 확인 완료 배지 표시
+      var existing = document.getElementById('confirmed-badge');
+      if (existing) existing.remove();
+      if (roundData.completed && roundData.completed[round]) {
+        var badge = document.createElement('span');
+        badge.id = 'confirmed-badge';
+        badge.className = 'confirmed-badge';
+        badge.textContent = '✅ 확인 완료';
+        document.getElementById('round-tabs').after(badge);
+      }
     }
     pages = roundData[round] || [];
     if (pages.length === 0) {

@@ -247,7 +247,7 @@ const server = http.createServer((req, res) => {
       const meta = (r) => {
         if (!p.rounds || !p.rounds[r]) return null;
         const rd = p.rounds[r];
-        return { updatedAt: rd.updatedAt, pageCount: (rd.pages||[]).length, annotCount: (rd.pages||[]).reduce((s,pg) => s + (pg.annotations||[]).length, 0) };
+        return { updatedAt: rd.updatedAt, pageCount: (rd.pages||[]).length, annotCount: (rd.pages||[]).reduce((s,pg) => s + (pg.annotations||[]).length, 0), completed: !!rd.completed };
       };
       return { id, name: p.name, createdAt: p.createdAt, rounds: { 1: meta(1), 2: meta(2) } };
     }).sort((a, b) => b.createdAt - a.createdAt);
@@ -299,6 +299,25 @@ const server = http.createServer((req, res) => {
       json(200, { ok: true });
       return;
     }
+  }
+
+  // 차수 완료 상태 토글
+  const roundCompleteMatch = pathname.match(/^\/api\/products\/([^/]+)\/rounds\/(\d+)\/complete$/);
+  if (roundCompleteMatch && req.method === 'PATCH') {
+    const [, id, round] = roundCompleteMatch;
+    if (!products[id]) { json(404, { error: '제품을 찾을 수 없습니다.' }); return; }
+    collectBody(req, (err, body) => {
+      if (err) { json(500, { error: err.message }); return; }
+      try {
+        const { completed } = JSON.parse(body);
+        if (!products[id].rounds) products[id].rounds = {};
+        if (!products[id].rounds[round]) products[id].rounds[round] = { pages: [], updatedAt: Date.now() };
+        products[id].rounds[round].completed = !!completed;
+        saveProducts();
+        json(200, { ok: true });
+      } catch (e) { json(400, { error: e.message }); }
+    });
+    return;
   }
 
   // 차수 저장
