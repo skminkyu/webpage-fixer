@@ -118,28 +118,25 @@
   let hoveredId = null;
 
   // ── Load ──
-  const apiUrl = isProduct ? `/api/products/${id}` : `/api/view/${id}`;
-  fetch(apiUrl)
-    .then(r => {
-      if (r.ok) return r.json();
-      return r.text().then(t => { try { const d = JSON.parse(t); return Promise.reject(d.error || '알 수 없는 오류'); } catch(e) { return Promise.reject(t || '알 수 없는 오류'); } });
-    })
-    .then(data => {
-      if (isProduct) {
+  function safeJson(r) {
+    if (r.ok) return r.json();
+    return r.text().then(t => { try { const d = JSON.parse(t); return Promise.reject(d.error || '오류'); } catch(e) { return Promise.reject(t || '오류'); } });
+  }
+
+  if (isProduct) {
+    // Step 1: fetch metadata only (fast, no image data)
+    fetch(`/api/products/${id}`)
+      .then(safeJson)
+      .then(data => {
         document.getElementById('hdr-title').textContent = '🖼 ' + (data.name || '검토 결과');
         document.title = data.name || '검토 결과';
 
-        // Build roundData from all rounds dynamically
         const apiRounds = data.rounds || {};
-        roundKeys = Object.keys(apiRounds).filter(r => apiRounds[r] && Array.isArray(apiRounds[r].pages) && apiRounds[r].pages.length > 0).sort((a, b) => Number(a) - Number(b));
-        roundKeys.forEach(r => {
-          roundData[r] = apiRounds[r].pages;
-          roundCompleted[r] = !!apiRounds[r].completed;
-        });
+        roundKeys = Object.keys(apiRounds).filter(r => apiRounds[r] && apiRounds[r].pageCount > 0).sort((a, b) => Number(a) - Number(b));
+        roundKeys.forEach(r => { roundCompleted[r] = !!(apiRounds[r] && apiRounds[r].completed); });
 
         if (roundKeys.length === 0) { showError('아직 등록된 주석이 없습니다.'); return; }
 
-        // Build round tab buttons dynamically
         roundTabsEl.innerHTML = '';
         roundKeys.forEach((r, i) => {
           const btn = document.createElement('button');
@@ -152,21 +149,21 @@
         roundTabsEl.style.display = 'flex';
 
         switchRound(roundKeys[0]);
-      } else {
-        // Legacy share: { imageDataUrl, annotations } or { pages }
+      })
+      .catch(err => showError(typeof err === 'string' ? err : (err.message || '불러오기 실패')));
+  } else {
+    // Legacy share
+    fetch(`/api/view/${id}`)
+      .then(safeJson)
+      .then(data => {
         loading.style.display = 'none';
-        let legacyPages;
-        if (Array.isArray(data.pages)) {
-          legacyPages = data.pages;
-        } else {
-          legacyPages = [{ imageDataUrl: data.imageDataUrl, annotations: data.annotations || [] }];
-        }
+        let legacyPages = Array.isArray(data.pages) ? data.pages : [{ imageDataUrl: data.imageDataUrl, annotations: data.annotations || [] }];
         roundData['1'] = legacyPages;
         roundKeys = ['1'];
         switchRound('1');
-      }
-    })
-    .catch(err => showError(typeof err === 'string' ? err : (err.message || '불러오기 실패')));
+      })
+      .catch(err => showError(typeof err === 'string' ? err : (err.message || '불러오기 실패')));
+  }
 
   function showError(msg) {
     loading.style.display = 'none';
@@ -188,25 +185,40 @@
         document.getElementById('round-tabs').after(badge);
       }
     }
+
+    // If already loaded, use cached data
+    if (roundData[round]) {
+      showRoundPages(round);
+      return;
+    }
+
+    // Step 2: fetch page data for this round only
+    loading.style.display = 'flex';
+    imageWrapper.style.display = 'none';
+    fetch(`/api/products/${id}/rounds/${round}`)
+      .then(safeJson)
+      .then(data => {
+        roundData[round] = data.pages || [];
+        showRoundPages(round);
+      })
+      .catch(err => showError(typeof err === 'string' ? err : (err.message || '불러오기 실패')));
+  }
+
+  function showRoundPages(round) {
     pages = roundData[round] || [];
+    const existingEmp = document.getElementById('round-empty');
+    if (existingEmp) existingEmp.remove();
     if (pages.length === 0) {
       loading.style.display = 'none';
       imageWrapper.style.display = 'none';
       annotations = [];
-      buildSidebar();
-      buildPageNav();
-      buildThumbStrip();
-      const existing = document.getElementById('round-empty');
-      if (existing) existing.remove();
+      buildSidebar(); buildPageNav(); buildThumbStrip();
       const emp = document.createElement('div');
-      emp.id = 'round-empty';
-      emp.className = 'round-empty';
+      emp.id = 'round-empty'; emp.className = 'round-empty';
       emp.innerHTML = '<div style="font-size:40px">📭</div><div>' + round + '차 등록된 내용이 없습니다.</div>';
       document.getElementById('canvas-area').appendChild(emp);
       return;
     }
-    const existing = document.getElementById('round-empty');
-    if (existing) existing.remove();
     currentPageIdx = 0;
     loadPage(0);
     buildThumbStrip();

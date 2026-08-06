@@ -275,13 +275,19 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 제품 상세
+  // 제품 상세 (메타데이터만 반환 - 이미지 데이터 제외)
   const productMatch = pathname.match(/^\/api\/products\/([^/]+)$/);
   if (productMatch) {
     const id = productMatch[1];
     if (req.method === 'GET') {
       if (!products[id]) { json(404, { error: '제품을 찾을 수 없습니다.' }); return; }
-      json(200, { id, ...products[id] });
+      const p = products[id];
+      const roundsMeta = {};
+      Object.keys(p.rounds || {}).sort((a,b)=>Number(a)-Number(b)).forEach(r => {
+        const rd = p.rounds[r];
+        roundsMeta[r] = { pageCount: (rd.pages||[]).length, annotCount: (rd.pages||[]).reduce((s,pg)=>s+(pg.annotations||[]).length,0), completed: !!rd.completed, updatedAt: rd.updatedAt };
+      });
+      json(200, { id, name: p.name, createdAt: p.createdAt, rounds: roundsMeta });
       return;
     }
     if (req.method === 'PATCH') {
@@ -324,8 +330,15 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 차수 저장
+  // 차수 페이지 데이터 조회/저장
   const roundMatch = pathname.match(/^\/api\/products\/([^/]+)\/rounds\/(\d+)$/);
+  if (roundMatch && req.method === 'GET') {
+    const [, id, round] = roundMatch;
+    if (!products[id]) { json(404, { error: '제품을 찾을 수 없습니다.' }); return; }
+    const rd = products[id].rounds && products[id].rounds[round];
+    json(200, { pages: (rd && rd.pages) || [], completed: !!(rd && rd.completed) });
+    return;
+  }
   if (roundMatch && req.method === 'PUT') {
     const [, id, round] = roundMatch;
     if (!products[id]) { json(404, { error: '제품을 찾을 수 없습니다.' }); return; }
