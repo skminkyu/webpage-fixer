@@ -1663,11 +1663,10 @@ function renderCompareResult(result) {
 
   function loadRoundData(productId, round) {
     setSaveStatus('불러오는 중...');
-    fetch('/api/products/' + productId)
+    fetch('/api/products/' + productId + '/rounds/' + round)
       .then(function(r) { return r.json(); })
-      .then(function(p) {
-        var rd = p.rounds && p.rounds[round];
-        pages = rd && rd.pages ? rd.pages.map(function(pg) {
+      .then(function(rd) {
+        pages = rd.pages ? rd.pages.map(function(pg) {
           return { imageDataUrl: pg.imageDataUrl, type: pg.type || 'image', name: pg.name || '', annotations: pg.annotations || [], nextNum: pg.nextNum || 1 };
         }) : [];
         currentPageIdx = -1;
