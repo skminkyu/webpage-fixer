@@ -1567,7 +1567,8 @@ function renderCompareResult(result) {
           var roundKeys = Object.keys(rounds).filter(function(r) { return r !== 'null'; }).sort(function(a, b) { return Number(a) - Number(b); });
           if (roundKeys.length === 0) roundKeys = ['1', '2'];
           var dataRounds = roundKeys.filter(function(r) { return rounds[r]; });
-          var allDone = dataRounds.length > 0 && dataRounds.every(function(r) { return rounds[r] && rounds[r].completed; });
+          var lastRound = dataRounds[dataRounds.length - 1];
+          var allDone = lastRound && rounds[lastRound] && rounds[lastRound].completed;
           var card = document.createElement('div');
           card.className = 'annot-product-card' + (allDone ? ' all-done' : '');
           var editColors = ['var(--accent)', 'var(--green)', '#f59e0b', '#ec4899', '#8b5cf6'];
